@@ -70,13 +70,20 @@ Status MakeXlaCompilerArgumentsFromInputs(
       arg.name = resource->name();
       VLOG(2) << "    resource " << resource->name()
               << " type: " << DataTypeString(arg.type)
-              << " shape: " << arg.shape.DebugString()
+              << " shape: " << arg.ShapeHumanString()
               << " initialized: " << arg.initialized;
 
     } else {
       arg.kind = XlaCompiler::Argument::kParameter;
       arg.type = ctx->input_type(i);
-      arg.shape = ctx->InputShape(i);
+
+      xla::XlaBuilder* builder = ctx->builder();
+      xla::XlaOp handle = ctx->Input(i);
+      auto shape_or_status = builder->GetShape(handle);
+      if (!shape_or_status.ok()) {
+        return shape_or_status.status();
+      }
+      arg.shape = shape_or_status.ValueOrDie();
     }
   }
   return Status::OK();
@@ -291,20 +298,15 @@ void XlaWhileOp::Compile(XlaOpKernelContext* ctx) {
 
   xla::XlaOp while_result = xla::While(cond_wrapper, *body.computation, init);
 
-  auto while_shape_or = builder->GetShape(while_result);
-  OP_REQUIRES_OK(ctx, while_shape_or.status());
-  auto count = xla::ShapeUtil::TupleElementCount(while_shape_or.ValueOrDie());
-  int max_index = body.outputs.size() + body.resource_updates.size() - 1;
-  OP_REQUIRES(
-      ctx, max_index < count,
-      errors::Internal("Max tuple element requested (", max_index,
-                       ") needs to be less than tuple size (", count, ")"));
-
-  // Sets non-variable outputs.
+  // Sets non-variable outputs and determine when resource variables start.
+  int resource_index = 0;
   for (int i = 0; i < ctx->num_outputs(); ++i) {
     if (ctx->input_type(i) != DT_RESOURCE) {
       ctx->SetOutput(body.input_mapping[i],
                      xla::GetTupleElement(while_result, i));
+      ++resource_index;
+    } else {
+      break;
     }
   }
   if (has_token_input_output_) {
@@ -326,7 +328,7 @@ void XlaWhileOp::Compile(XlaOpKernelContext* ctx) {
     XlaResource* resource;
     OP_REQUIRES_OK(ctx, ctx->GetResourceInput(update.input_index, &resource));
     if (update.modified) {
-      int pos = body.outputs.size() + i;
+      int pos = resource_index + i;
       OP_REQUIRES_OK(ctx,
                      resource->SetFromPack(
                          arguments[update.input_index].tensor_array_gradients,

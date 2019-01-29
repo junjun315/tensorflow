@@ -269,10 +269,11 @@ REGISTER_OP("Conv2D")
     .Attr("T: {half, bfloat16, float, double}")
     .Attr("strides: list(int)")
     .Attr("use_cudnn_on_gpu: bool = true")
-    .Attr(GetPaddingAttrString())
+    .Attr(GetPaddingAttrStringWithExplicit())
+    .Attr(GetExplicitPaddingsAttrString())
     .Attr(GetConvnetDataFormatAttrString())
     .Attr("dilations: list(int) = [1, 1, 1, 1]")
-    .SetShapeFn(shape_inference::Conv2DShape);
+    .SetShapeFn(shape_inference::Conv2DShapeWithExplicitPadding);
 
 REGISTER_OP("Conv2DBackpropInput")
     .Input("input_sizes: int32")
@@ -282,7 +283,8 @@ REGISTER_OP("Conv2DBackpropInput")
     .Attr("T: {half, bfloat16, float, double}")
     .Attr("strides: list(int)")
     .Attr("use_cudnn_on_gpu: bool = true")
-    .Attr(GetPaddingAttrString())
+    .Attr(GetPaddingAttrStringWithExplicit())
+    .Attr(GetExplicitPaddingsAttrString())
     .Attr(GetConvnetDataFormatAttrString())
     .Attr("dilations: list(int) = [1, 1, 1, 1]")
     .SetShapeFn([](InferenceContext* c) {
@@ -304,7 +306,8 @@ REGISTER_OP("Conv2DBackpropFilter")
     .Attr("T: {half, bfloat16, float, double}")
     .Attr("strides: list(int)")
     .Attr("use_cudnn_on_gpu: bool = true")
-    .Attr(GetPaddingAttrString())
+    .Attr(GetPaddingAttrStringWithExplicit())
+    .Attr(GetExplicitPaddingsAttrString())
     .Attr(GetConvnetDataFormatAttrString())
     .Attr("dilations: list(int) = [1, 1, 1, 1]")
     .SetShapeFn([](InferenceContext* c) {
@@ -2531,6 +2534,7 @@ NOTE Do not invoke this operator directly in Python. Graph rewrite pass is
 expected to invoke these operators.
 )doc");
 
+#endif  // INTEL_MKL
 REGISTER_OP("QuantizedConv2DAndRequantize")
     .Input("input: Tinput")
     .Input("filter: Tfilter")
@@ -2867,6 +2871,5 @@ REGISTER_OP("QuantizedConv2DWithBiasSignedSumAndReluAndRequantize")
       return Status::OK();
     });
 
-#endif  // INTEL_MKL
 
 }  // namespace tensorflow
